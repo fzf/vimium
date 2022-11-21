@@ -447,9 +447,6 @@ class DomainCompleter {
 // Searches through all open tabs, matching on title and URL.
 class TabCompleter {
   filter({ name, queryTerms }, onComplete) {
-    if ((name !== "tabs") && (queryTerms.length === 0))
-      return onComplete([]);
-
     // NOTE(philc): We search all tabs, not just those in the current window. I'm not sure if this is the
     // correct UX.
     chrome.tabs.query({}, tabs => {
