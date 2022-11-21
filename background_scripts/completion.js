@@ -251,19 +251,15 @@ class BookmarkCompleter {
     // full path as its title. Otherwise, we'll just use the its regular title.
     let results;
     const usePathAndTitle = this.currentSearch.queryTerms.reduce(((prev,term) => prev || term.startsWith(folderSeparator)), false);
-    if (this.currentSearch.queryTerms.length > 0) {
-      results = this.bookmarks.filter(bookmark => {
-        const suggestionTitle = usePathAndTitle ? bookmark.pathAndTitle : bookmark.title;
-        if (bookmark.hasJavascriptPrefix == null)
-          bookmark.hasJavascriptPrefix = Utils.hasJavascriptPrefix(bookmark.url);
-        if (bookmark.hasJavascriptPrefix && bookmark.shortUrl == null)
-            bookmark.shortUrl = "javascript:...";
-        const suggestionUrl = bookmark.shortUrl != null ? bookmark.shortUrl : bookmark.url;
-        return RankingUtils.matches(this.currentSearch.queryTerms, suggestionUrl, suggestionTitle);
-      });
-    } else {
-      results = [];
-    }
+    results = this.bookmarks.filter(bookmark => {
+      const suggestionTitle = usePathAndTitle ? bookmark.pathAndTitle : bookmark.title;
+      if (bookmark.hasJavascriptPrefix == null)
+        bookmark.hasJavascriptPrefix = Utils.hasJavascriptPrefix(bookmark.url);
+      if (bookmark.hasJavascriptPrefix && bookmark.shortUrl == null)
+          bookmark.shortUrl = "javascript:...";
+      const suggestionUrl = bookmark.shortUrl != null ? bookmark.shortUrl : bookmark.url;
+      return RankingUtils.matches(this.currentSearch.queryTerms, suggestionUrl, suggestionTitle);
+    });
     const suggestions = results.map(bookmark => {
       return new Suggestion({
         queryTerms: this.currentSearch.queryTerms,
@@ -317,39 +313,28 @@ class BookmarkCompleter {
 }
 
 class HistoryCompleter {
-  filter({ queryTerms, seenTabToOpenCompletionList }, onComplete) {
-    if ((queryTerms.length === 0) && !seenTabToOpenCompletionList) {
-      onComplete([]);
-      // Prime the history cache so that it will (hopefully) be available on the user's next keystroke.
-      Utils.nextTick(() => HistoryCache.use(function() {}));
-    } else {
-      HistoryCache.use(history => {
-        let results;
-        if (0 < queryTerms.length) {
-          results = history.filter(entry => RankingUtils.matches(queryTerms, entry.url, entry.title));
-        } else {
-          // The user has typed <Tab> to open the entire history (sorted by recency).
-          results = history;
-        }
-        onComplete(results.map(entry => {
-          return new Suggestion({
-            queryTerms,
-            type: "history",
-            url: entry.url,
-            title: entry.title,
-            relevancyFunction: this.computeRelevancy,
-            relevancyData: entry
-          });
-        }));
-      });
-    }
+  filter({ queryTerms }, onComplete) {
+    HistoryCache.use(history => {
+      let results;
+      results = history.filter(entry => RankingUtils.matches(queryTerms, entry.url, entry.title));
+
+      onComplete(results.map(entry => {
+        return new Suggestion({
+          queryTerms,
+          type: "history",
+          url: entry.url,
+          title: entry.title,
+          relevancyFunction: this.computeRelevancy,
+          relevancyData: entry
+        });
+      }));
+    });
   }
 
   computeRelevancy(suggestion) {
     const historyEntry = suggestion.relevancyData;
     const recencyScore = RankingUtils.recencyScore(historyEntry.lastVisitTime);
     // If there are no query terms, then relevancy is based on recency alone.
-    if (suggestion.queryTerms.length === 0) { return recencyScore; }
     const wordRelevancy = RankingUtils.wordRelevancy(suggestion.queryTerms, suggestion.url, suggestion.title);
     // Average out the word score and the recency. Recency has the ability to pull the score up, but not down.
     return (wordRelevancy + Math.max(recencyScore, wordRelevancy)) / 2;
@@ -369,8 +354,6 @@ class DomainCompleter {
 
   filter({ queryTerms, query }, onComplete) {
     // Do not offer completions if the query is empty, or if the user has finished typing the first word.
-    if ((queryTerms.length === 0) || /\S\s/.test(query))
-      return onComplete([]);
     if (this.domains)
       this.performSearch(queryTerms, onComplete);
     else
@@ -480,10 +463,7 @@ class TabCompleter {
   }
 
   computeRelevancy(suggestion) {
-    if (suggestion.queryTerms.length)
-      return RankingUtils.wordRelevancy(suggestion.queryTerms, suggestion.url, suggestion.title);
-    else
-      return BgUtils.tabRecency.recencyScore(suggestion.tabId);
+    return RankingUtils.wordRelevancy(suggestion.queryTerms, suggestion.url, suggestion.title);
   }
 }
 
